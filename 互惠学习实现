@@ -300,7 +300,7 @@ def calculate_transfer_time(current_mode, next_mode, cargo_weight):
     return transfer_time, transfer_cost
 
 
-def calculate_total_distance_cost_and_time(path, start_time=11):
+def calculate_total_distance_cost_and_time(path, start_time=9):
     total_distance = 0
     total_cost = 0
     total_co2_emission = 0
@@ -403,39 +403,37 @@ def calculate_total_distance_cost_and_time(path, start_time=11):
 
 
 class Individual:
-    def __init__(self, path, regret_coefficient):
+    def __init__(self, path):  # 由于不再使用遗憾系数，可以将其移除或保留但不使用
         self.path = path
-        self.has_exchanged = False  # 初始状态设置为False，表示还未参与过交换
-        self.fitness, self.regret_coefficient = self.evaluate(regret_coefficient)
+        self.has_exchanged = False
+        self.fitness = self.evaluate()
 
-    def evaluate(self, regret_coefficient):
+    def evaluate(self):
         total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
             self.path)
-        # 使用 Sigmoid 归一化函数对评估值进行归一化
-        normalized_score = sigmoid(total_time) * sigmoid(total_cost) * sigmoid(total_co2_emission)
-        regret = regret_coefficient * normalized_score  # 计算遗憾系数
-        fitness = normalized_score - regret  # 将遗憾值作为惩罚项
-        return fitness, regret
+        # 直接使用归一化分数作为适应度评估
+        fitness = sigmoid(total_time) * sigmoid(total_cost) * sigmoid(total_co2_emission)
+        return fitness
 
     def update_has_exchanged(self, exchanged):
         self.has_exchanged = exchanged
 
 class Sparrow:
-    def __init__(self, city_list, regret_coefficient):
+    def __init__(self, city_list):  # 同样，遗憾系数参数可以移除或保留但不使用
         self.path = city_list
-        self.has_exchanged = False  # 初始状态设置为False，表示还未参与过交换
-        self.fitness, self.regret_coefficient = self.evaluate(regret_coefficient)
+        self.has_exchanged = False
+        self.fitness = self.evaluate()
 
-    def evaluate(self, regret_coefficient):
+    def evaluate(self):
         total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
             self.path)
-        # 使用 Sigmoid 归一化函数对评估值进行归一化
-        normalized_score = sigmoid(total_time) * sigmoid(total_cost) * sigmoid(total_co2_emission)
-        regret = regret_coefficient * normalized_score  # 计算遗憾系数
-        fitness = normalized_score - regret  # 将遗憾值作为惩罚项
-        return fitness, regret
+        # 直接使用归一化分数作为适应度评估
+        fitness = sigmoid(total_time) * sigmoid(total_cost) * sigmoid(total_co2_emission)
+        return fitness
+
     def update_has_exchanged(self, exchanged):
         self.has_exchanged = exchanged
+
 
 def adjust_path_safely(path, city_list, transport_distances, step_size):
     """
@@ -493,8 +491,7 @@ def adjust_step_size(current_generation, max_generations, initial_step_size, fin
     return initial_step_size + (final_step_size - initial_step_size) * (current_generation / max_generations)
 
 
-def generate_sparrows(num_sparrows, city_list, regret_coefficient, transport_distances, current_generation,
-                      max_generations, initial_step_size=0.1, final_step_size=0.01):
+def generate_sparrows(num_sparrows, city_list, transport_distances, current_generation, max_generations, initial_step_size=0.1, final_step_size=0.02):
     sparrows = []
     num_discoverers = int(num_sparrows * 0.2)  # 20%为发现者
     alert_threshold = 0.5  # 警戒阈值
@@ -502,27 +499,49 @@ def generate_sparrows(num_sparrows, city_list, regret_coefficient, transport_dis
     step_size = adjust_step_size(current_generation, max_generations, initial_step_size, final_step_size)
 
     for i in range(num_sparrows):
-        best_path = generate_individual()  # 假设这个函数返回一个有效的初始路径
+        # 假设generate_individual返回一个有效的初始路径
+        best_path = generate_individual()
         if best_path:
-            # 发现者的行为可能包括寻找新的解决方案
-            if i < num_discoverers:
-                new_sparrow = Sparrow(best_path, regret_coefficient)
-            else:
-                # 跟随者行为，考虑步长和警戒机制
-                adjusted_step_size = step_size if random.random() >= alert_threshold else step_size * 0.5
-                # 应用调整的步长来安全地调整路径
-                adjusted_path = adjust_path_safely(best_path, city_list, transport_distances, adjusted_step_size)
-                new_sparrow = Sparrow(adjusted_path, regret_coefficient)
+            # 根据发现者或跟随者角色调整路径
+            adjusted_step_size = step_size if i >= num_discoverers or random.random() >= alert_threshold else step_size * 0.3
+            adjusted_path = adjust_path_safely(best_path, city_list, transport_distances, adjusted_step_size)
+            new_sparrow = Sparrow(adjusted_path)
             sparrows.append(new_sparrow)
-
     return sparrows
+
+
+def select_and_operate_based_on_regret(population, tournament_size, current_generation, num_generations):
+    new_population = []
+
+    # 锦标赛选择和操作，无需基于遗憾系数
+    while len(new_population) < len(population):
+        tournament = random.sample(population, tournament_size)
+        winner = min(tournament, key=lambda ind: ind.fitness)  # 使用适应度而不是相对遗憾
+        new_population.append(winner)
+
+    # 调整交叉和变异概率
+    crossover_probability, mutation_probability = adjust_crossover_mutation_rates(current_generation, num_generations)
+
+    # 交叉和变异操作
+    children = []
+    for i in range(0, len(new_population) - 1, 2):
+        child1, child2 = tournament_crossover(new_population[i], new_population[i + 1], crossover_probability, 0.5)
+        children.append(child1)
+        children.append(child2)
+
+    for child in children:
+        mutate(child, mutation_probability)
+
+    new_population.extend(children)
+
+    return new_population[:len(population)]  # 确保新种群不超过原始种群大小
 
 
 def reciprocal_learning(ga_population, ssa_population, current_generation, max_generations):
     # 自适应交换率计算
     exchange_rate = 0.1 + (0.2 - 0.1) * (current_generation / max_generations)
     num_exchange = int(len(ga_population) * exchange_rate)
-    num_optimal_exchange = int(num_exchange * 0.2)  # 50%的交换用于最优个体
+    num_optimal_exchange = int(num_exchange * 0.3)  # 20%的交换用于最优个体
     num_random_exchange = num_exchange - num_optimal_exchange  # 剩余的交换用于随机个体
 
     # 对两个种群进行排序
@@ -556,36 +575,23 @@ def reciprocal_learning(ga_population, ssa_population, current_generation, max_g
     return ga_sorted, ssa_sorted
 
 
-def genetic_algorithm_with_sparrows(population_size, num_generations, tournament_size, ssa_population_size,
-                                    ga_regret_coefficient, ssa_regret_coefficient, city_list, transport_distances):
-    # 初始化种群和麻雀个体
-    population = [Individual(generate_individual(), ga_regret_coefficient) for _ in range(population_size)]
-    # 初始调用时传递必要的参数
-    sparrows = generate_sparrows(ssa_population_size, city_list, ssa_regret_coefficient, transport_distances, 1,
-                                 num_generations)
+def genetic_algorithm_with_sparrows(population_size, num_generations, tournament_size, ssa_population_size, city_list, transport_distances, regret_coefficient):
+    population = [Individual(generate_individual()) for _ in range(population_size)]
+    sparrows = generate_sparrows(ssa_population_size, city_list, transport_distances, 1, num_generations)
 
     for current_generation in range(1, num_generations + 1):
-        # 动态调整交叉和变异概率
-        crossover_probability, mutation_probability = adjust_crossover_mutation_rates(current_generation,
-                                                                                      num_generations)
-        # 进行选择、交叉和变异操作
-        new_population = []
-        while len(new_population) < population_size:
-            parent1 = select(population, tournament_size)
-            parent2 = select(population, tournament_size)
-            child1, child2 = tournament_crossover(parent1, parent2, crossover_probability, 0.5)
-            new_population.extend([child1, child2])
-        # 对新生成的个体进行变异操作
-        for individual in new_population:
-            mutate(individual, mutation_probability)
-        # 更新种群
-        population = update_population_with_sparrows(population, sparrows, population_size, tournament_size)
-        # 为每一代生成新的麻雀个体，这次传递当前代数和最大代数
-        sparrows = generate_sparrows(ssa_population_size, city_list, ssa_regret_coefficient, transport_distances,
-                                     current_generation, num_generations)
+        new_population = select_and_operate_based_on_regret(population, tournament_size, current_generation, num_generations)
+        population = update_population_with_sparrows(population, sparrows, population_size)
+        sparrows = generate_sparrows(ssa_population_size, city_list, transport_distances, current_generation, num_generations)
 
-    # 返回最终种群
-    return population
+    # 计算最终种群中每个个体的相对遗憾数，并与设定的遗憾系数进行比较
+    paths_meeting_regret_criteria = []
+    best_fitness = max(individual.fitness for individual in population)
+    for individual in population:
+        relative_regret = best_fitness - individual.fitness
+        if relative_regret <= regret_coefficient:
+            paths_meeting_regret_criteria.append(individual.path)
+    return max(population, key=lambda ind: ind.fitness)  # 返回最终的最佳个体
 
 
 def select(population, tournament_size):
@@ -600,7 +606,7 @@ def adjust_crossover_mutation_rates(current_generation, max_generations):
     随着代数增加，减少交叉概率，增加变异概率。
     """
     crossover_probability = max(0.5, 1 - 0.5 * (current_generation / max_generations))  # 调整方式
-    mutation_probability = min(0.5, 0.1 + 0.4 * (current_generation / max_generations))  # 调整方式
+    mutation_probability = min(0.6, 0.1 + 0.6 * (current_generation / max_generations))  # 调整方式
     return crossover_probability, mutation_probability
 
 
@@ -608,20 +614,18 @@ def tournament_crossover(parent1, parent2, crossover_probability, crossover_poin
     """
     根据提供的交叉概率和交叉点比例执行交叉操作。
     """
-    # 进行交叉操作
     if random.random() < crossover_probability:
         crossover_point = int(len(parent1.path) * crossover_point_ratio)
-        child1_path = parent1.path[:crossover_point] + [city for city in parent2.path if
-                                                        city not in parent1.path[:crossover_point]]
-        child2_path = parent2.path[:crossover_point] + [city for city in parent1.path if
-                                                        city not in parent2.path[:crossover_point]]
+        # 生成子代路径，确保是由父代路径交叉得到
+        child1_path = parent1.path[:crossover_point] + [city for city in parent2.path if city not in parent1.path[:crossover_point]]
+        child2_path = parent2.path[:crossover_point] + [city for city in parent1.path if city not in parent2.path[:crossover_point]]
     else:
-        # 如果不进行交叉，则子代与父代相同
-        child1_path, child2_path = parent1.path, parent2.path
+        # 如果不进行交叉，子代路径与父代相同
+        child1_path, child2_path = parent1.path[:], parent2.path[:]
 
-    # 创建新的个体对象
-    child1 = Individual(child1_path, parent1.regret_coefficient)
-    child2 = Individual(child2_path, parent2.regret_coefficient)
+    # 创建新的个体对象，仅传入路径参数
+    child1 = Individual(child1_path)
+    child2 = Individual(child2_path)
 
     return child1, child2
 
@@ -754,7 +758,7 @@ def calculate_objectives(individual):
     return [-total_cost, -total_time, -total_co2_emission]  # 我们的目标是最小化这些值
 
 
-def update_population_with_sparrows(population, sparrows, population_size, tournament_size):
+def update_population_with_sparrows(population, sparrows, population_size):
     new_population = []
     fronts = non_dominated_sort(population)
     for front in fronts:
@@ -785,36 +789,33 @@ def update_population_with_sparrows(population, sparrows, population_size, tourn
 
     return new_population
 
-
 # 主程序
 if __name__ == "__main__":
     # 定义参数
     city_list = ["city1", "city2", "city3", "city4", "city5", "city6", "city7", "city8", "city9", "city10", "city11",
                  "city12"]
     population_size = 150  # 种群大小
-    num_generations = 50  # 迭代次数或生成的数量，遗传算法的运行轮数
-    tournament_size = 20  # 锦标赛选择过程中比较的个体数量，用于选择操作
-    crossover_probability = 0.2  # 交叉概率，决定是否进行交叉操作的概率
-    mutation_probability = 0.8  # 变异概率，决定是否进行变异操作的概率
-    crossover_point_ratio = 0.1  # 交叉点在染色体（个体路径）长度的比例，用于确定交叉操作的位置
-    mutation_points = 3  # 每次变异操作中变异点的数量，即在每次变异时随机交换的城市对数
+    num_generations = 35  # 迭代次数或生成的数量，遗传算法的运行轮数
+    tournament_size = 24  # 锦标赛选择过程中比较的个体数量，用于选择操作
     cost_weight = 0.3
     time_weight = 0.5
     co2_emission_weight = 0.2
-    ga_regret_coefficient = 0.23  # GA的遗憾系数
-    ssa_regret_coefficient = 0.23  # SSA的遗憾系数
     ssa_population_size = 150
+    regret_coefficient = 10
 
     # 初始化一个列表来存储所有运行的Pareto解集
     all_pareto_solutions = []
 
-    # 运行算法8次
-    for run in range(10):
-        pareto_front = genetic_algorithm_with_sparrows(population_size, num_generations, tournament_size,
-                                                       ssa_population_size,
-                                                       ga_regret_coefficient, ssa_regret_coefficient, city_list,
-                                                       transport_distances)
+    # 运行算法1次
+    for run in range(25):
+        pareto_front = genetic_algorithm_with_sparrows(population_size, num_generations, tournament_size, ssa_population_size,
+                                                       city_list, transport_distances, regret_coefficient)
+
         # 将当前运行的Pareto解集添加到总列表中
+        if not isinstance(pareto_front, list):
+            pareto_front = [pareto_front]  # 将单个解决方案包装成列表
+
+        # 现在 pareto_front 确定是列表类型，可以安全地扩展 all_pareto_solutions 列表
         all_pareto_solutions.extend(pareto_front)
 
     # 对所有解进行去重。这里我们使用一个字典来存储唯一的路径作为键，以及对应的个体作为值
@@ -832,8 +833,18 @@ if __name__ == "__main__":
     # 从字典中提取去重后的Pareto解集，并按适应度由高到低排序
     final_pareto_solutions = sorted(unique_solutions.values(), key=lambda x: x.fitness, reverse=True)
 
-    # 输出 Pareto 最优解集
-    print("Pareto 最优解集：")
+    # 在所有迭代完成后处理满足遗憾系数条件的路径
+    paths_meeting_regret_criteria = []
+    for individual in final_pareto_solutions:
+        relative_regret = 1 - individual.fitness
+        if relative_regret <= regret_coefficient:
+            paths_meeting_regret_criteria.append(individual.path)
+
+    # 输出满足遗憾系数条件的路径
+    print("满足遗憾系数条件的路径:")
+    for path in paths_meeting_regret_criteria:
+        print(path)
+
     # 收集用于绘图的数据
     transport_times = []  # 运输总时间
     transport_costs = []  # 运输总成本
