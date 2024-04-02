@@ -300,7 +300,7 @@ def calculate_transfer_time(current_mode, next_mode, cargo_weight):
     return transfer_time, transfer_cost
 
 
-def calculate_total_distance_cost_and_time(path, start_time=7):
+def calculate_total_distance_cost_and_time(path, start_time=21):
     total_distance = 0
     total_cost = 0
     total_co2_emission = 0
@@ -491,7 +491,7 @@ def adjust_step_size(current_generation, max_generations, initial_step_size, fin
     return initial_step_size + (final_step_size - initial_step_size) * (current_generation / max_generations)
 
 
-def generate_sparrows(num_sparrows, city_list, transport_distances, current_generation, max_generations, initial_step_size=0.1, final_step_size=0.02):
+def generate_sparrows(num_sparrows, city_list, transport_distances, current_generation, max_generations, initial_step_size=0.1, final_step_size=0.01):
     sparrows = []
     num_discoverers = int(num_sparrows * 0.5)  # 20%为发现者
     alert_threshold = 0.2  # 警戒阈值
@@ -527,7 +527,7 @@ def select_and_operate_based_on_regret(population, tournament_size, current_gene
     # 交叉和变异操作
     children = []
     for i in range(0, len(new_population) - 1, 2):
-        child1, child2 = tournament_crossover(new_population[i], new_population[i + 1], crossover_probability, 0.5)
+        child1, child2 = tournament_crossover(new_population[i], new_population[i + 1], crossover_probability, 0.2)
         mutate(child1, mutation_probability)
         mutate(child2, mutation_probability)
         children.append(child1)
@@ -593,7 +593,7 @@ def genetic_algorithm_with_sparrows(population_size, num_generations, tournament
         while len(new_population) < population_size:
             parent1 = select(population, tournament_size)
             parent2 = select(population, tournament_size)
-            child1, child2 = tournament_crossover(parent1, parent2, crossover_probability, 0.5)
+            child1, child2 = tournament_crossover(parent1, parent2, crossover_probability, 0.2)
             new_population.extend([child1, child2])
         # 对新生成的个体进行变异操作
         for individual in new_population:
@@ -631,7 +631,7 @@ def adjust_crossover_mutation_rates(current_generation, max_generations):
     return crossover_probability, mutation_probability
 
 
-def tournament_crossover(parent1, parent2, crossover_probability, crossover_point_ratio = 0.1):
+def tournament_crossover(parent1, parent2, crossover_probability, crossover_point_ratio = 0.2):
     """
     根据提供的交叉概率和交叉点比例执行交叉操作。
     """
@@ -883,7 +883,7 @@ if __name__ == "__main__":
         # individual.path, start_time=9)
 
         # 这里定义出发时间为21
-        start_time = 7
+        start_time = 21
         total_distance, total_cost, total_time, total_co2_emission, _, departure_times, _, _, _, _, total_transport_time, _ = calculate_total_distance_cost_and_time(
             individual.path, start_time=start_time)
         print("从城市1开始运输的起始时间：", departure_times)
