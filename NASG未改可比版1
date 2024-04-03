@@ -231,13 +231,13 @@ def generate_individual():
 
 # 计算超时的惩罚成本
 def calculate_additional_cost(total_time, cargo_weight):
-    if total_time < 16:
+    if total_time < 10:
         # 计算少于15小时的储藏成本
-        under_time_hours = 16 - total_time
+        under_time_hours = 10 - total_time
         return math.ceil(under_time_hours) * storage_cost_per_hour * cargo_weight
-    elif total_time > 36:
+    elif total_time > 20:
         # 计算超过30小时的惩罚成本
-        overtime_hours = math.ceil(total_time - 36)
+        overtime_hours = math.ceil(total_time - 20)
         return overtime_hours * penalty_cost_per_hour * cargo_weight
     else:
         # 如果在15到30小时之间，没有额外成本
@@ -421,17 +421,16 @@ def calculate_total_distance_cost_and_time(path, start_time=9):
 class Individual:
     def __init__(self, path):
         self.path = path
-        self.fitness = self.evaluate()
+        self.has_exchanged = False
+        self.objectives = self.evaluate()  # 直接计算并存储各个目标的值
+        self.rank = None  # 添加rank属性
+        self.distance = 0  # 添加distance属性
+
 
     def evaluate(self):
-        total_distance, total_cost_new, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
-            self.path)
-        # 使用1-sigmoid的方式进行归一化处理
-        normalized_total_time = 1 - sigmoid(total_time)
-        normalized_total_cost = 1 - sigmoid(total_cost_new)
-        normalized_total_co2_emission = 1 - sigmoid(total_co2_emission)
-        score = normalized_total_time + normalized_total_cost + normalized_total_co2_emission
-        return score
+        # 计算并返回多个目标的值，这里不再进行归一化处理
+        total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(self.path)
+        return [total_cost, total_time, total_co2_emission]  # 直接返回成本、时间和CO2排放量作为优化目标
 
 def crossover(parent1, parent2):
     # 交叉点索引
@@ -452,40 +451,53 @@ def mutate(individual):
     individual.path[mutation_points[0]]
 
 
-def select(population, tournament_size):
-    # 随机选择 tournament_size 个个体进行比较，选出其中适应度最好的个体
-    tournament = random.sample(population, tournament_size)
-    return min(tournament, key=lambda x: x.fitness)
+def select(population):
+    sorted_tournament = sorted(population , key=lambda ind: (ind.rank, -ind.distance))
+    # 选择排名最高且拥挤距离最大的个体
+    return sorted_tournament[0]
+
+
+def dominates(individual_a, individual_b):
+    # 检查个体A是否在所有目标上都不差于个体B，并且至少在一个目标上优于B
+    better_in_one = False
+    for i in range(len(individual_a.objectives)):
+        if individual_a.objectives[i] > individual_b.objectives[i]:
+            return False
+        elif individual_a.objectives[i] < individual_b.objectives[i]:
+            better_in_one = True
+    return better_in_one
 
 
 def non_dominated_sort(population):
     fronts = [[]]
     for individual in population:
-        individual.dominates = set()
-        individual.dominated_by = 0
-        for other_individual in population:
-            if individual.fitness < other_individual.fitness:
-                individual.dominates.add(other_individual)
-            elif individual.fitness > other_individual.fitness:
-                individual.dominated_by += 1
-        if individual.dominated_by == 0:
+        individual.dominated_set = set()
+        individual.domination_count = 0
+        for other in population:
+            if dominates(individual, other):
+                individual.dominated_set.add(other)
+            elif dominates(other, individual):
+                individual.domination_count += 1
+        if individual.domination_count == 0:
             individual.rank = 0
             fronts[0].append(individual)
+
     i = 0
     while fronts[i]:
         next_front = []
         for individual in fronts[i]:
-            for dominated_individual in individual.dominates:
-                dominated_individual.dominated_by -= 1
-                if dominated_individual.dominated_by == 0:
-                    dominated_individual.rank = i + 1
-                    next_front.append(dominated_individual)
+            for dominated in individual.dominated_set:
+                dominated.domination_count -= 1
+                if dominated.domination_count == 0:
+                    dominated.rank = i + 1
+                    next_front.append(dominated)
         i += 1
         if next_front:
             fronts.append(next_front)
         else:
-            break  # 添加此处的逻辑以处理空前沿的情况
+            break
     return fronts
+
 
 def crowding_distance_assignment(fronts):
     for front in fronts:
@@ -616,20 +628,20 @@ if __name__ == "__main__":
         # 将当前运行的Pareto解集添加到总列表中
         all_pareto_solutions.extend(pareto_front)
 
-    # 对所有解进行去重。这里我们使用字典来存储唯一的路径作为键，以及对应的个体作为值
-    unique_solutions = {}
-    for individual in all_pareto_solutions:
-        # 使用路径作为唯一性检查的基准
-        path_tuple = tuple(individual.path)
-        if path_tuple not in unique_solutions:
-            unique_solutions[path_tuple] = individual
-        else:
-            # 如果已有该路径，选择适应度更高的个体保留
-            if individual.fitness > unique_solutions[path_tuple].fitness:
+        # 对所有解进行去重。这里我们使用一个字典来存储唯一的路径作为键，以及对应的个体作为值
+        unique_solutions = {}
+        for individual in all_pareto_solutions:
+            # 使用路径作为唯一性检查的基准
+            path_tuple = tuple(individual.path)
+            if path_tuple not in unique_solutions:
                 unique_solutions[path_tuple] = individual
+            else:
+                # 如果已有该路径，保留Pareto前沿中的个体
+                # 注意：这里假设all_pareto_solutions已经是Pareto最优解，不需要基于适应度比较
+                pass  # 不执行任何操作，因为在Pareto最优解中，不应存在"更好"的概念
 
-    # 从字典中提取去重后的Pareto解集，并按适应度由高到低排序
-    final_pareto_solutions = sorted(unique_solutions.values(), key=lambda x: x.fitness, reverse=True)
+        # 从字典中提取去重后的Pareto解集
+        final_pareto_solutions = list(unique_solutions.values())
 
     # 输出 Pareto 最优解集
     print("Pareto 最优解集：")
@@ -643,7 +655,7 @@ if __name__ == "__main__":
         # if index == len(final_pareto_solutions) - 1:
         # continue  # 跳过最后一次迭代
         temp_total_time = 0
-        print(f"路径: {individual.path}, 适应度: {individual.fitness}")
+        print(f"路径: {individual.path}")
 
         # 计算当前 Pareto 最优解的运输总成本、运输总距离和运输总时间
         # total_distance, total_cost, total_time, total_co2_emission,  _, _, _, _, _, departure_times, total_transport_time = calculate_total_distance_cost_and_time(
