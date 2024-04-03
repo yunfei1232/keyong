@@ -184,7 +184,7 @@ def sigmoid(x):
     return 1 / (1 + math.exp(-x))
 
 
-def evaluate_individual(path, time_weight, cost_weight, co2_emission_weight):
+def evaluate_individual(path):
     """评估个体的函数，返回评估分数。可以根据实际情况调整评估逻辑。"""
     total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
         path)
@@ -196,7 +196,7 @@ def evaluate_individual(path, time_weight, cost_weight, co2_emission_weight):
 
     # 根据权重计算综合评分
     score = (
-                normalized_total_time * time_weight + normalized_total_cost * cost_weight + normalized_total_co2_emission * co2_emission_weight)
+            normalized_total_time + normalized_total_cost + normalized_total_co2_emission )
 
     return score
 
@@ -230,13 +230,12 @@ def generate_individual():
             current_city = next_city
 
         if path[-1] == "city12":  # 确保路径有效
-            score = evaluate_individual(path, time_weight, cost_weight, co2_emission_weight)
+            score = evaluate_individual(path)
             if score < best_score:
                 best_path = path
                 best_score = score
 
     return best_path
-
 
 
 # 格式化时间，考虑次日情况
@@ -300,7 +299,7 @@ def calculate_transfer_time(current_mode, next_mode, cargo_weight):
     return transfer_time, transfer_cost
 
 
-def calculate_total_distance_cost_and_time(path, start_time=15):
+def calculate_total_distance_cost_and_time(path, start_time=21):
     total_distance = 0
     total_cost = 0
     total_co2_emission = 0
@@ -394,8 +393,8 @@ def calculate_total_distance_cost_and_time(path, start_time=15):
 
         previous_mode = mode
 
-    usetime = use_time(str(start_time), str(departure_times[0]))
-    total_time = total_transport_time + total_transfer_time + total_waiting_time + usetime
+
+    total_time = total_transport_time + total_transfer_time + total_waiting_time 
     penalty_cost = cargo_weight * storage_cost_per_hour * (10 - total_time if total_time < 10 else 0) + \
                    cargo_weight * penalty_cost_per_hour * (total_time - 20 if total_time > 20 else 0)
     total_cost += penalty_cost
@@ -410,14 +409,15 @@ class Individual:
         self.rank = None  # 添加rank属性
         self.distance = 0  # 添加distance属性
 
-
     def evaluate(self):
         # 计算并返回多个目标的值，这里不再进行归一化处理
-        total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(self.path)
+        total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
+            self.path)
         return [total_cost, total_time, total_co2_emission]  # 直接返回成本、时间和CO2排放量作为优化目标
 
     def update_has_exchanged(self, exchanged):
         self.has_exchanged = exchanged
+
 
 class Sparrow:
     def __init__(self, city_list):
@@ -429,7 +429,8 @@ class Sparrow:
 
     def evaluate(self):
         # 计算并返回多个目标的值，这里不再进行归一化处理
-        total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(self.path)
+        total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
+            self.path)
         return [total_cost, total_time, total_co2_emission]  # 直接返回成本、时间和CO2排放量作为优化目标
 
     def update_has_exchanged(self, exchanged):
@@ -492,7 +493,8 @@ def adjust_step_size(current_generation, max_generations, initial_step_size, fin
     return initial_step_size + (final_step_size - initial_step_size) * (current_generation / max_generations)
 
 
-def generate_sparrows(num_sparrows, city_list, transport_distances, current_generation, max_generations, initial_step_size=0.1, final_step_size=0.01):
+def generate_sparrows(num_sparrows, city_list, transport_distances, current_generation, max_generations,
+                      initial_step_size=0.1, final_step_size=0.01):
     sparrows = []
     num_discoverers = int(num_sparrows * 0.5)  # 20%为发现者
     alert_threshold = 0.2  # 警戒阈值
@@ -565,8 +567,8 @@ def reciprocal_learning(ga_population, ssa_population, current_generation, num_g
 
     # 随机个体交换以增加多样性
     for _ in range(num_random_exchange):
-        ga_index = random.randint(num_optimal_exchange, len(ga_sorted)-1)
-        ssa_index = random.randint(num_optimal_exchange, len(ssa_sorted)-1)
+        ga_index = random.randint(num_optimal_exchange, len(ga_sorted) - 1)
+        ssa_index = random.randint(num_optimal_exchange, len(ssa_sorted) - 1)
 
         # 执行交换
         ga_sorted[ga_index], ssa_sorted[ssa_index] = ssa_sorted[ssa_index], ga_sorted[ga_index]
@@ -578,7 +580,8 @@ def reciprocal_learning(ga_population, ssa_population, current_generation, num_g
     return ga_sorted, ssa_sorted
 
 
-def genetic_algorithm_with_sparrows(population_size, num_generations, tournament_size, ssa_population_size, city_list, transport_distances):
+def genetic_algorithm_with_sparrows(population_size, num_generations, tournament_size, ssa_population_size, city_list,
+                                    transport_distances):
     # 初始化种群和麻雀个体
     population = [Individual(generate_individual()) for _ in range(population_size)]
     # 初始调用时传递必要的参数
@@ -612,7 +615,6 @@ def genetic_algorithm_with_sparrows(population_size, num_generations, tournament
     return population
 
 
-
 def select(population, tournament_size):
     # 进行锦标赛选择
     tournament = random.sample(population, tournament_size)
@@ -632,15 +634,17 @@ def adjust_crossover_mutation_rates(current_generation, max_generations):
     return crossover_probability, mutation_probability
 
 
-def tournament_crossover(parent1, parent2, crossover_probability, crossover_point_ratio = 0.2):
+def tournament_crossover(parent1, parent2, crossover_probability, crossover_point_ratio=0.2):
     """
     根据提供的交叉概率和交叉点比例执行交叉操作。
     """
     if random.random() < crossover_probability:
         crossover_point = int(len(parent1.path) * crossover_point_ratio)
         # 生成子代路径，确保是由父代路径交叉得到
-        child1_path = parent1.path[:crossover_point] + [city for city in parent2.path if city not in parent1.path[:crossover_point]]
-        child2_path = parent2.path[:crossover_point] + [city for city in parent1.path if city not in parent2.path[:crossover_point]]
+        child1_path = parent1.path[:crossover_point] + [city for city in parent2.path if
+                                                        city not in parent1.path[:crossover_point]]
+        child2_path = parent2.path[:crossover_point] + [city for city in parent1.path if
+                                                        city not in parent2.path[:crossover_point]]
     else:
         # 如果不进行交叉，子代路径与父代相同
         child1_path, child2_path = parent1.path[:], parent2.path[:]
@@ -652,7 +656,7 @@ def tournament_crossover(parent1, parent2, crossover_probability, crossover_poin
     return child1, child2
 
 
-def mutate(individual, mutation_probability, mutation_points = 2):
+def mutate(individual, mutation_probability, mutation_points=2):
     path_length = len(individual.path)
     if random.random() < mutation_probability and path_length > 2 + mutation_points:
         for _ in range(mutation_points):
@@ -661,13 +665,6 @@ def mutate(individual, mutation_probability, mutation_points = 2):
             # 交换这两个位置的城市
             individual.path[point1], individual.path[point2] = individual.path[point2], individual.path[point1]
 
-
-
-def evaluate_algorithm_performance(ga_population, ssa_population):
-    """根据GA和SSA种群中的最优适应度评估算法性能"""
-    ga_best_fitness = max(individual.fitness for individual in ga_population) if ga_population else 0
-    ssa_best_fitness = max(sparrow.fitness for sparrow in ssa_population) if ssa_population else 0
-    return ga_best_fitness, ssa_best_fitness
 
 
 def dominates(individual_a, individual_b):
@@ -732,17 +729,19 @@ def crowding_distance_assignment(fronts):
                 for i in range(1, len(front) - 1):
                     front[i].distance += (calculate_objectives(front[i + 1])[m] - calculate_objectives(front[i - 1])[
                         m]) / objective_range
-    
-def cal_total_cost(total_time, total_coast):   
-    adjusted_total_cost = total_coast  
+
+
+def cal_total_cost(total_time, total_coast):
+    adjusted_total_cost = total_coast
     if total_time < 15:
         extra_storage_cost = (10 - total_time) * 5000
-        adjusted_total_cost += extra_storage_cost  
-    elif total_time > 20:   
-        extra_penalty_cost = (total_time - 20) * 10000  
-        adjusted_total_cost += extra_penalty_cost  
+        adjusted_total_cost += extra_storage_cost
+    elif total_time > 20:
+        extra_penalty_cost = (total_time - 20) * 10000
+        adjusted_total_cost += extra_penalty_cost
     return adjusted_total_cost
-    
+
+
 def contain_wait_time(mode):
     wait_time = 0
     if mode[-2:] == ['rail', 'rail']:
@@ -833,6 +832,7 @@ def update_population_with_sparrows(population, sparrows, population_size):
 
     return new_population
 
+
 # 主程序
 if __name__ == "__main__":
     # 定义参数
@@ -841,13 +841,10 @@ if __name__ == "__main__":
     population_size = 200  # 种群大小
     num_generations = 100  # 迭代次数或生成的数量，遗传算法的运行轮数
     tournament_size = 30  # 锦标赛选择过程中比较的个体数量，用于选择操作
-    cost_weight = 0.3
-    time_weight = 0.5
-    co2_emission_weight = 0.2
+
     crossover_point_ratio = 0.1  # 交叉点在染色体（个体路径）长度的比例，用于确定交叉操作的位置
     mutation_points = 2  # 每次变异操作中变异点的数量，即在每次变异时随机交换的城市对数
     ssa_population_size = 100
-
 
     # 初始化一个列表来存储所有运行的Pareto解集
     all_pareto_solutions = []
@@ -893,7 +890,7 @@ if __name__ == "__main__":
         # individual.path, start_time=9)
 
         # 这里定义出发时间为21
-        start_time = 15
+        start_time = 21
         total_distance, total_cost, total_time, total_co2_emission, _, departure_times, _, _, _, _, total_transport_time, _ = calculate_total_distance_cost_and_time(
             individual.path, start_time=start_time)
         print("从城市1开始运输的起始时间：", departure_times)
@@ -916,7 +913,7 @@ if __name__ == "__main__":
             individual.path, start_time=start_time)
         usetime = use_time(str(start_time), str(departure_times[0]))
         print(f"运输总时间(新): {float(temp_total_time) + float(usetime)} 小时")
-        total_cost_new = cal_total_cost(float(temp_total_time) + float(usetime),float(temp_total_cost))
+        total_cost_new = cal_total_cost(float(temp_total_time) + float(usetime), float(temp_total_cost))
         print(f"运输总成本(新): {total_cost_new} 元")
         print("最佳路径详细信息:")
         temp_waiting_time = 0
