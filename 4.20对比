@@ -1,0 +1,712 @@
+import math
+import random, time
+import matplotlib.pyplot as plt
+import numpy as np
+from datetime import datetime, timedelta
+
+# 定义城市坐标和距离矩阵
+cities = {
+    "city1": (104.07, 30.67),
+    "city2": (106.33, 29.35),
+    "city3": (110.30, 29.20),
+    "city4": (111.28, 30.69),
+    "city5": (112.98, 28.19),
+    "city6": (113.53, 29.42),
+    "city7": (115.90, 28.68),
+    "city8": (117.27, 31.86),
+    "city9": (118.37, 31.32),
+    "city10": (118.79, 32.06),
+    "city11": (120.21, 30.24),
+    "city12": (121.48, 31.22)
+}
+
+# 定义城市之间的航空运输距离和铁路运输距离（以公里为单位）以及每单位的运输成本
+transport_distances = {
+    ("city1", "city2"): {"air": 0, "rail": 361},
+    ("city1", "city3"): {"air": 695, "rail": 0},
+    ("city1", "city4"): {"air": 870, "rail": 0},
+    ("city1", "city5"): {"air": 940, "rail": 0},
+    ("city1", "city6"): {"air": 1047, "rail": 0},
+    ("city1", "city7"): {"air": 1240, "rail": 0},
+    ("city1", "city8"): {"air": 1392, "rail": 0},
+    ("city1", "city9"): {"air": 1528, "rail": 0},
+    ("city1", "city10"): {"air": 1618, "rail": 0},
+    ("city1", "city11"): {"air": 1699, "rail": 0},
+    ("city1", "city12"): {"air": 1782, "rail": 0},
+    ("city2", "city3"): {"air": 0, "rail": 591},
+    ("city2", "city4"): {"air": 0, "rail": 642},
+    ("city2", "city5"): {"air": 695, "rail": 890},
+    ("city2", "city6"): {"air": 801, "rail": 954},
+    ("city2", "city7"): {"air": 970, "rail": 1279},
+    ("city2", "city8"): {"air": 1146, "rail": 0},
+    ("city2", "city9"): {"air": 1419, "rail": 1409},
+    ("city2", "city10"): {"air": 1305, "rail": 0},
+    ("city2", "city11"): {"air": 1500, "rail": 0},
+    ("city2", "city12"): {"air": 1537, "rail": 0},
+    ("city3", "city5"): {"air": 0, "rail": 329},
+    ("city3", "city7"): {"air": 0, "rail": 746},
+    ("city3", "city10"): {"air": 970, "rail": 0},
+    ("city3", "city12"): {"air": 1366, "rail": 0},
+    ("city4", "city5"): {"air": 0, "rail": 455},
+    ("city4", "city6"): {"air": 0, "rail": 334},
+    ("city4", "city8"): {"air": 0, "rail": 667},
+    ("city4", "city9"): {"air": 0, "rail": 789},
+    ("city4", "city10"): {"air": 0, "rail": 820},
+    ("city5", "city7"): {"air": 0, "rail": 417},
+    ("city5", "city8"): {"air": 0, "rail": 746},
+    ("city5", "city9"): {"air": 0, "rail": 868},
+    ("city5", "city10"): {"air": 799, "rail": 899},
+    ("city5", "city11"): {"air": 805, "rail": 0},
+    ("city5", "city12"): {"air": 964, "rail": 0},
+    ("city6", "city9"): {"air": 0, "rail": 482},
+    ("city6", "city10"): {"air": 0, "rail": 513},
+    ("city6", "city11"): {"air": 656, "rail": 0},
+    ("city6", "city12"): {"air": 761, "rail": 0},
+    ("city7", "city8"): {"air": 0, "rail": 462},
+    ("city7", "city9"): {"air": 0, "rail": 451},
+    ("city7", "city10"): {"air": 0, "rail": 572},
+    ("city7", "city11"): {"air": 0, "rail": 644},
+    ("city8", "city9"): {"air": 0, "rail": 129},
+    ("city8", "city10"): {"air": 0, "rail": 156},
+    ("city8", "city11"): {"air": 0, "rail": 396},
+    ("city9", "city10"): {"air": 0, "rail": 121},
+    ("city9", "city11"): {"air": 0, "rail": 267},
+    ("city10", "city12"): {"air": 0, "rail": 300},
+    ("city11", "city12"): {"air": 0, "rail": 203},
+}
+
+# 假设的飞机起飞窗口
+flight_takeoff_windows = {
+    'city1_to_city3': (11, 12),  # 8点到21点，每小时一个航班
+    'city1_to_city4': (12, 13),  # 14点到15点，可能只有14点这一个航班
+    'city1_to_city5': (7, 22),  # 7点到21点，每小时一个航班
+    'city1_to_city6': (8, 18),  # 7点到19点，每小时一个航班
+    'city1_to_city7': (16, 17),  # 6点到19点，每小时一个航班
+    'city1_to_city8': (6, 13),  # 6点到19点，每小时一个航班
+    'city1_to_city9': (14, 15),  # 6点到19点，每小时一个航班
+    'city1_to_city10': (7, 18),  # 6点到19点，每小时一个航班
+    'city1_to_city11': (7, 21),  # 6点到19点，每小时一个航班
+    'city1_to_city12': (8, 20),  # 6点到19点，每小时一个航班
+    'city2_to_city5': (7, 22),  # 6点到19点，每小时一个航班
+    'city2_to_city6': (10, 22),  # 6点到19点，每小时一个航班
+    'city2_to_city7': (14, 15),  # 6点到19点，每小时一个航班
+    'city2_to_city9': (9, 10),  # 6点到19点，每小时一个航班
+    'city2_to_city10': (7, 22),  # 6点到19点，每小时一个航班
+    'city2_to_city11': (7, 11),  # 6点到19点，每小时一个航班
+    'city2_to_city12': (5, 21),  # 6点到19点，每小时一个航班
+    'city3_to_city10': (20, 21),  # 6点到19点，每小时一个航班
+    'city5_to_city10': (8, 21),  # 6点到19点，每小时一个航班
+    'city5_to_city11': (8, 23),  # 6点到19点，每小时一个航班
+    'city5_to_city12': (8, 18),  # 6点到19点，每小时一个航班
+    'city6_to_city11': (15, 18),  # 6点到19点，每小时一个航班
+    'city6_to_city12': (8, 19),  # 6点到19点，每小时一个航班
+}
+
+rail_timetable_windows = {
+    'city1_to_city2': (6, 22),  # 8点到21点，每小时一个航班
+    'city2_to_city3': (8, 12),  # 14点到15点，可能只有14点这一个航班
+    'city2_to_city4': (6, 16),  # 7点到21点，每小时一个航班
+    'city2_to_city5': (8, 17),  # 7点到19点，每小时一个航班
+    'city2_to_city6': (6, 18),  # 6点到19点，每小时一个航班
+    'city2_to_city7': (6, 20),  # 6点到19点，每小时一个航班
+    'city2_to_city9': (7, 12),  # 6点到19点，每小时一个航班
+    'city3_to_city5': (6, 21),  # 6点到19点，每小时一个航班
+    'city3_to_city7': (7, 8),  # 6点到19点，每小时一个航班
+    'city4_to_city5': (6, 23),  # 6点到19点，每小时一个航班
+    'city4_to_city6': (6, 22),  # 6点到19点，每小时一个航班
+    'city4_to_city8': (6, 21),  # 6点到19点，每小时一个航班
+    'city4_to_city9': (6, 21),  # 6点到19点，每小时一个航班
+    'city4_to_city10': (6, 16),  # 6点到19点，每小时一个航班
+    'city5_to_city7': (4, 21),  # 6点到19点，每小时一个航班
+    'city5_to_city8': (7, 19),  # 6点到19点，每小时一个航班
+    'city5_to_city9': (11, 15),  # 6点到19点，每小时一个航班
+    'city5_to_city10': (7, 18),  # 6点到19点，每小时一个航班
+    'city6_to_city9': (7, 18),  # 6点到19点，每小时一个航班
+    'city6_to_city10': (6, 19),  # 6点到19点，每小时一个航班
+    'city7_to_city8': (5, 23),  # 6点到19点，每小时一个航班
+    'city7_to_city9': (7, 23),  # 6点到19点，每小时一个航班
+    'city7_to_city10': (7, 23),  # 6点到19点，每小时一个航班
+    'city7_to_city11': (7, 23),  # 6点到19点，每小时一个航班
+    'city8_to_city9': (7, 23),  # 6点到19点，每小时一个航班
+    'city8_to_city10': (2, 22),  # 6点到19点，每小时一个航班
+    'city8_to_city11': (2, 23),  # 6点到19点，每小时一个航班
+    'city9_to_city10': (0, 23),  # 6点到19点，每小时一个航班
+    'city9_to_city11': (0, 23),  # 6点到19点，每小时一个航班
+    'city10_to_city12': (0, 22),  # 6点到19点，每小时一个航班
+    'city11_to_city12': (1, 23),  # 6点到19点，每小时一个航班
+}
+
+# 定义给定的变量
+air_transport_cost_per_km = 3.31  # 航空每公里成本，单位：元/吨·公里
+rail_transport_cost_per_km = 0.05  # 铁路每公里成本，单位：元/吨·公里
+air_speed_km_per_hour = 840  # 航空速度，单位：公里/小时
+rail_speed_km_per_hour = 70  # 铁路速度，单位：公里/小时
+cargo_weight = 6  # 货物重量，单位：吨
+
+inter_rail_transfer_cost = 0.05  # 铁路间转运成本，单位：元/吨
+inter_modal_transfer_cost = 0.162  # 不同模式间转运成本，单位：元/吨
+inter_air_transfer_cost = 3.31  # 航空间转运成本，单位：元/吨
+
+rail_co2_emission_per_km_per_ton = 0.033  # 铁路每公里每吨碳排放，单位：千克/吨·公里
+air_co2_emission_per_km_per_ton = 0.973  # 航空每公里每吨碳排放，单位：千克/吨·公里
+
+inter_rail_co2_emission_per_ton = 0.033  # 铁路转运之间的碳排放量，单位：千克/吨
+inter_air_co2_emission_per_ton = 0.973  # 航空转运之间的碳排放量，单位：千克/吨
+inter_modal_co2_emission_per_ton = 0.044  # 不同模式间转运碳排放量，单位：千克/吨
+
+storage_cost_per_hour = 1000  # 储藏成本每小时
+penalty_cost_per_hour = 2000  # 超时惩罚成本每小时
+
+# 创建城市列表
+cities_list = [city for pair in transport_distances.keys() for city in pair]
+cities_list = list(set(cities_list))  # 去重
+
+# 建立城市到索引的映射和索引到城市的映射
+city_to_index = {city: i for i, city in enumerate(cities_list)}
+index_to_city = {i: city for i, city in enumerate(cities_list)}
+
+
+# 定义一个函数来获取两个城市之间的运输信息
+def get_transport_info(city1, city2):
+    if (city1, city2) in transport_distances:
+        info = transport_distances[(city1, city2)]
+        air_distance = info.get("air", 0)
+        rail_distance = info.get("rail", 0)
+        mode = "air" if air_distance > 0 else "rail"
+        distance = air_distance if air_distance > 0 else rail_distance
+        time = distance / air_speed_km_per_hour if air_distance > 0 else distance / rail_speed_km_per_hour
+        cost = distance * (air_transport_cost_per_km if mode == "air" else rail_transport_cost_per_km) * cargo_weight
+        return mode, distance, time, cost
+    return "none", 0, 0, 0
+
+
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
+
+
+def generate_individual():
+    path = ["city1"]
+    current_city = "city1"
+    visited_cities = set([current_city])
+
+    while current_city != "city12":
+        next_city_candidates = [
+            city for city in cities_list
+            if city not in visited_cities
+               and int(city.replace("city", "")) > int(current_city.replace("city", ""))
+               and ((current_city, city) in transport_distances or (city, current_city) in transport_distances)
+               and (get_transport_info(current_city, city)[0] != "none")
+        ]
+
+        if not next_city_candidates:
+            break
+
+        next_city = random.choice(next_city_candidates)
+        path.append(next_city)
+        visited_cities.add(next_city)
+        current_city = next_city
+
+    if path[-1] == "city12":  # 确保路径有效
+        return path
+    else:
+        # 如果最终路径不是有效的（没有到达city12），这里返回None或者可以选择返回一个部分路径，这取决于你的需求
+        return None
+
+
+# 计算超时的惩罚成本
+
+
+
+# 格式化时间，考虑次日情况
+# 格式化时间，考虑次日情况
+def format_time(hour_decimal):
+    hours = int(hour_decimal) % 24  # 小时数，对24取余
+    minutes = int((hour_decimal - int(hour_decimal)) * 60)  # 分钟数
+    next_day_prefix = "" if hour_decimal < 24 else "次日 "
+    return f"{next_day_prefix}{hours:02d}:{minutes:02d}"
+
+
+# 修改等待时间，考虑次日情况
+def adjust_departure_for_timetable_window(city1, city2, mode, arrival_time, timetable_windows):
+    key = f'{city1}_to_{city2}'
+    window = timetable_windows.get(key, None)
+    waiting_time = 0.41 if mode == "rail" else 0  # 除非明确给出，否则这是默认预设的等待时间
+    departure_time = arrival_time % 24
+    if window:
+        start_hour, end_hour = window
+        if departure_time < start_hour:
+            waiting_time = start_hour - departure_time
+        elif start_hour <= departure_time <= end_hour:
+            waiting_time = 0
+        else:
+            waiting_time = 24 - departure_time + start_hour
+        departure_time = (departure_time + waiting_time) % 24
+    return departure_time, waiting_time
+
+# # 转运时间计算逻辑(旧)
+# def calculate_transfer_time(current_mode, next_mode, cargo_weight):
+#     transfer_time, transfer_cost = 0, 0
+#     if next_mode == "air":
+#         if current_mode == "air":
+#             transfer_time = random.uniform(1.08, 1.5)  # 空运到空运的转运时间
+#             transfer_cost = inter_air_transfer_cost * cargo_weight  # 空运到空运的转运成本
+#         else:  # 前一个模式为铁路，下一个模式为空运
+#             transfer_time = random.uniform(2.25, 2.67)
+#             transfer_cost = inter_modal_transfer_cost * cargo_weight
+#     else:  # 下一个模式为铁路
+#         if current_mode == "air":  # 前一个模式为航空，后一个模式为铁路
+#             transfer_time = random.uniform(2.8, 3.42)
+#             transfer_cost = inter_modal_transfer_cost * cargo_weight
+#         else:  # 铁路到铁路的转运时间
+#             transfer_time = random.uniform(2.8, 3.42)
+#             transfer_cost = inter_rail_transfer_cost * cargo_weight
+#     return transfer_time, transfer_cost
+
+
+def calculate_total_distance_cost_and_time(path):
+    total_distance = 0
+    total_cost = 0
+    total_co2_emission = 0
+    total_transport_time = 0
+    total_transfer_time = 0
+    total_waiting_time = 0
+    # previous_mode = None
+    initial_waiting_time = 0
+    # 记录每程的相关信息
+    transfer_times = []
+    waiting_times = []
+    transshipment_waiting_times = []
+    departure_times = []
+    extra_waiting_time = []
+    modes = []
+
+    # 定义出发时间
+    start_time = 9
+
+    cumulative_time = start_time  # Initialize cumulative time
+    for i in range(len(path) - 1):
+        # 选择本程的运输方式以及得出对应的运输代价
+        current_city = path[i]
+        next_city = path[i + 1]
+        mode, distance, time, cost = get_transport_info(current_city, next_city)
+
+        total_distance += distance
+        total_transport_time += time
+        total_cost += (air_transport_cost_per_km if mode == "air" else rail_transport_cost_per_km) * distance * cargo_weight
+        total_cost += inter_air_transfer_cost if mode == "air" else inter_rail_transfer_cost
+        total_co2_emission += (air_co2_emission_per_km_per_ton if mode == "air" else rail_co2_emission_per_km_per_ton) * distance * cargo_weight
+
+        # 添加当前模式到模式列表
+        modes.append(mode)
+
+        # 检查是否有模式转换，如果有，则增加转运成本和碳排放
+        if i > 0 and modes[i] != modes[i - 1]:
+            total_cost += inter_modal_transfer_cost * cargo_weight * 50
+            total_co2_emission += inter_modal_co2_emission_per_ton * cargo_weight * 50
+
+        # 假如本程是中转程，需要考虑上程结束到本程出发前的必要耗费时间
+        if i != 0 and i < len(path) - 1:  # calculate waiting and transshipment times for subsequent segments
+            # # 计算等待时间(旧)
+            # waiting_time_minutes = random.uniform(38, 75) if mode == "air" else random.uniform(25, 50)
+            # waiting_time = max(waiting_time_minutes / 60, 0.41)  # Make sure it's at least 0.41 hours
+            # total_waiting_time += waiting_time
+            # waiting_times.append(waiting_time)
+
+            # 计算等待时间(新)
+            waiting_time = count_ralation_time(modes)
+            waiting_times.append(waiting_time)
+            total_waiting_time += waiting_time
+
+            # # 计算转运时间(旧)
+            # transfer_time, additional_transfer_cost = calculate_transfer_time(previous_mode, mode, cargo_weight)
+            # total_transfer_time += transfer_time
+            # transfer_times.append(transfer_time)
+
+            # 计算转运时间(新)
+            transfer_time = contain(modes)
+            transfer_times.append(transfer_time)
+            total_transfer_time += transfer_time
+
+            # # 计算转运等待时间(旧)
+            # current_city = path[i]
+            # next_city = path[i + 1]
+            # next_segment_key = (current_city, next_city)
+            # next_segment_distances = transport_distances.get(next_segment_key, {})
+            # next_distance_air = next_segment_distances.get("air", 0)
+            # next_distance_rail = next_segment_distances.get("rail", 0)
+            # if next_distance_air > 0:  # 如果下一段旅迹是航空
+            #     transshipment_waiting_time_minutes = random.uniform(25, 50)
+            # elif next_distance_rail > 0:  # 如果下一段旅迹是铁路
+            #     transshipment_waiting_time_minutes = random.uniform(38, 75)
+            # else:  # 如果没有明确的下一段距离信息，我们可以预设一个默认的等待时间
+            #     transshipment_waiting_time_minutes = random.uniform(1, 2)  # 设定一个默认的等待时间或任何其他的逻辑
+            # transshipment_waiting_time = max(transshipment_waiting_time_minutes / 60, 0.166)  # 保证至少等待0.166小时
+            # transshipment_waiting_time = max(transshipment_waiting_time_minutes / 60, 0.166)  # 保证最少等待 0.166 小时
+            # total_waiting_time += transshipment_waiting_time
+
+            # 计算转运等待时间(新)
+            transshipment_waiting_time = contain_wait_time(modes)
+            transshipment_waiting_times.append(transshipment_waiting_time)
+            total_waiting_time += transshipment_waiting_time
+
+            cumulative_time += transfer_times[-1] + waiting_times[-1] + transshipment_waiting_times[-1]
+
+        # 考虑本程的出发时间不在本程运输工具对应的发车时间窗范围内所需要额外耗费的等待时间
+        if mode == "air" or mode == "rail":
+            departure_windows = flight_takeoff_windows if mode == "air" else rail_timetable_windows
+            adjusted_time, adjusted_waiting_time = adjust_departure_for_timetable_window(
+                current_city, next_city, mode, cumulative_time, departure_windows)
+            extra_waiting_time.append(adjusted_waiting_time)
+            cumulative_time = adjusted_time
+            if adjusted_waiting_time > 0:  # Add adjusted waiting time if it's greater than the initial waiting time
+                total_waiting_time += adjusted_waiting_time
+                if i != 0:
+                    waiting_times[-1] += adjusted_waiting_time  # Update the last waiting time
+
+        departure_times.append(format_time(cumulative_time))
+
+        if len(path) == 2:  # if there is direct path from city1 to city12 without any intermediate, we do not need to wait or transfer
+            total_waiting_time = sum(extra_waiting_time)
+            total_transfer_time = 0
+            transfer_times = [0]
+            waiting_times = [0]
+            transshipment_waiting_times = [0]
+            break  # skip the rest calculations
+
+        # 本程处理完毕，准备进入下一程
+        cumulative_time += time
+        # previous_mode = mode
+
+    total_time = total_transport_time + total_transfer_time + total_waiting_time
+    penalty_cost = storage_cost_per_hour * cargo_weight * (10 - total_time if total_time < 10 else 0) + \
+                   penalty_cost_per_hour * cargo_weight * (total_time - 20 if total_time > 20 else 0)
+    total_cost += penalty_cost
+    return total_distance, total_cost, total_time, total_co2_emission, transfer_times, departure_times, waiting_times, transshipment_waiting_times, total_transfer_time, total_waiting_time, total_transport_time, extra_waiting_time
+
+
+def contain_wait_time(modes):
+    wait_time = 0
+    if modes[-2:] == ['rail', 'rail']:
+        wait_time = random.uniform(0.63, 1.25)
+    elif modes[-2:] == ['air', 'air']:
+        wait_time = random.uniform(0.42, 0.83)
+    elif modes[-2:] == ['air', 'rail']:
+        wait_time = random.uniform(0.42, 0.83)
+    elif modes[-2:] == ['rail', 'air']:
+        wait_time = random.uniform(0.63, 1.25)
+    return wait_time
+
+
+def contain(modes):
+    transfer_time = 0
+    if modes[-2:] == ['rail', 'rail']:
+        transfer_time = random.uniform(2.8, 3.42)
+    elif modes[-2:] == ['air', 'air']:
+        transfer_time = random.uniform(1.08, 1.5)
+    elif modes[-2:] == ['air', 'rail']:
+        transfer_time = random.uniform(2.8, 3.42)
+    elif modes[-2:] == ['rail', 'air']:
+        transfer_time = random.uniform(2.25, 2.67)
+    return transfer_time
+
+
+def use_time(s, e):
+    time_format = "%H"  # 指定时间格式
+    time_format2 = "%H:%M"  # 指定时间格式
+    start_time = datetime.strptime(s, time_format)  # 指定开始时间
+    end_time = datetime.strptime(e, time_format2)  # 指定结束时间
+    if end_time < start_time:  # 如果结束时间小于开始时间，说明跨越了一天
+        end_time = end_time.replace(day=end_time.day + 1)  # 将结束时间的日期设置为开始时间的第二天
+    use_time = (end_time - start_time).total_seconds() / 3600  # 计算时间差并转换为小时
+    return use_time
+
+
+def add_hours_to_time(current_time, hours_to_add):
+    # 将时间转换为datetime
+    current_datetime = datetime.strptime(current_time, "%H:%M")
+    # 添加的时间
+    time_to_add = timedelta(hours=hours_to_add)
+    # 将时间添加到当前时间
+    new_datetime = current_datetime + time_to_add
+    # 将新时间转换回字符串
+    new_time = new_datetime.strftime("%H:%M")
+    return new_time
+
+
+def count_ralation_time(modes):
+    ralation_time = 0
+    if modes[-2:] == ['rail', 'rail']:
+        ralation_time = random.uniform(0.63, 1.25)
+    elif modes[-2:] == ['air', 'air']:
+        ralation_time = random.uniform(0.42, 0.83)
+    elif modes[-2:] == ['air', 'rail']:
+        ralation_time = random.uniform(0.63, 1.25)
+    elif modes[-2:] == ['rail', 'air']:
+        ralation_time = random.uniform(0.42, 0.83)
+    return ralation_time
+
+
+def is_time_in_range(check_time, time_range):
+    start_time, end_time = time_range
+    check_hour, check_minute = map(int, check_time.split(":"))
+    check_minutes = check_hour * 60 + check_minute
+    start_minutes = start_time * 60
+    end_minutes = end_time * 60
+    if start_minutes <= check_minutes <= end_minutes:
+        return True
+    else:
+        return False
+
+
+def calculate_waiting_time(check_time, time_range):
+    start_time, end_time = time_range
+    check_datetime = datetime.strptime(check_time, '%H:%M')
+    start_datetime = datetime.combine(datetime.today(), datetime.min.time()) + timedelta(hours=start_time)
+
+    if check_datetime < start_datetime:
+        waiting_time = (start_datetime - check_datetime).seconds / 3600.0
+    else:
+        next_day = check_datetime + timedelta(days=1)
+        waiting_time = (start_datetime - next_day).seconds / 3600.0
+    # formatted_waiting_hours = "{:.2f}".format(waiting_time)
+    formatted_waiting_hours = float(waiting_time)
+    return formatted_waiting_hours
+
+
+def endresult_time(result_time, mode, city1, city2):
+    # print('目前出发时间是：',result_time)
+    needkey = city1 + '_to_' + city2
+    # print(needkey,mode)
+    if mode == 'rail':
+        fanwei = rail_timetable_windows[needkey]
+        # print(fanwei)
+    else:
+        fanwei = flight_takeoff_windows[needkey]
+        # print(fanwei)
+    # result_time = "13:30"
+    # fanwei = (7, 12)
+    if not is_time_in_range(result_time, fanwei):
+        waiting_hours = calculate_waiting_time(result_time, fanwei)
+        # print(f"不在时间窗范围内，需要额外等待 {waiting_hours} 小时")
+    else:
+        waiting_hours = 0
+        # print('在时间窗范围内')
+    return waiting_hours
+
+class Individual:
+    def __init__(self, path):
+        self.path = path
+        self.has_exchanged = False
+        self.fitness = self.evaluate()  # 直接计算并存储各个目标的值
+        self.rank = None  # 添加rank属性
+        self.distance = 0  # 添加distance属性
+
+
+    def evaluate(self):
+        # 计算并返回多个目标的值，这里不再进行归一化处理
+        total_distance, total_cost, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(self.path)
+        fitness = sigmoid(total_time) + sigmoid(total_cost) + sigmoid(total_co2_emission)
+        return fitness  # 直接返回成本、时间和CO2排放量作为优化目标
+
+
+def crossover(parent1, parent2, crossover_probability=0.7):
+    # 检查是否执行交叉
+    if random.random() < crossover_probability:
+        # 交叉点索引
+        crossover_point = random.randint(1, len(parent1) - 2)
+
+        # 生成子代
+        child1 = parent1[:crossover_point] + [city for city in parent2 if city not in parent1[:crossover_point]]
+        child2 = parent2[:crossover_point] + [city for city in parent1 if city not in parent2[:crossover_point]]
+        return child1, child2
+    else:
+        # 如果不交叉，直接返回父代
+        return parent1, parent2
+
+
+def mutate(individual, mutation_probability=0.6):
+    # 检查是否执行变异
+    if random.random() < mutation_probability:
+        # 随机选择两个位置进行变异
+        mutation_points = random.sample(range(1, len(individual.path) - 1), 2)
+        # 交换路径中对应位置的城市
+        individual.path[mutation_points[0]], individual.path[mutation_points[1]] = individual.path[mutation_points[1]], individual.path[mutation_points[0]]
+
+
+
+def select(population):
+    sorted_tournament = sorted(population , key=lambda ind: (ind.rank, -ind.distance))
+    # 选择排名最高且拥挤距离最大的个体
+    return sorted_tournament[0]
+
+
+def dominates(individual_a, individual_b):
+    # 检查个体A的适应度是否优于个体B
+    return individual_a.fitness < individual_b.fitness  # 假设适应度越低越好
+
+
+def non_dominated_sort(population):
+    fronts = [[]]
+    for individual in population:
+        individual.dominated_set = set()
+        individual.domination_count = 0
+        for other in population:
+            if dominates(individual, other):
+                individual.dominated_set.add(other)
+            elif dominates(other, individual):
+                individual.domination_count += 1
+        if individual.domination_count == 0:
+            individual.rank = 0
+            fronts[0].append(individual)
+
+    i = 0
+    while fronts[i]:
+        next_front = []
+        for individual in fronts[i]:
+            for dominated in individual.dominated_set:
+                dominated.domination_count -= 1
+                if dominated.domination_count == 0:
+                    dominated.rank = i + 1
+                    next_front.append(dominated)
+        i += 1
+        if next_front:
+            fronts.append(next_front)
+        else:
+            break
+    return fronts
+
+
+
+def crowding_distance_assignment(fronts):
+    for front in fronts:
+        if len(front) > 2:
+            for individual in front:
+                individual.distance = 0
+
+            num_objectives = len(calculate_objectives(front[0]))
+            for m in range(num_objectives):
+                front.sort(key=lambda x: calculate_objectives(x)[m])
+
+                front[0].distance = float('inf')
+                front[-1].distance = float('inf')
+
+                objective_range = front[-1].fitness - front[0].fitness
+                if objective_range == 0:
+                    continue
+
+                for i in range(1, len(front) - 1):
+                    front[i].distance += (calculate_objectives(front[i + 1])[m] - calculate_objectives(front[i - 1])[
+                        m]) / objective_range
+
+
+def calculate_objectives(individual):
+    """
+    计算个体的目标函数值。
+    """
+    total_distance, total_cost_new, total_time, total_co2_emission, _, _, _, _, _, _, _, _ = calculate_total_distance_cost_and_time(
+        individual.path)
+    return [-total_cost_new, -total_time, -total_co2_emission]  # 我们的目标是最小化这些值
+
+
+def update_population(population, population_size, tournament_size = 0):
+    new_population = []
+    fronts = non_dominated_sort(population)
+    for front in fronts:
+        if len(new_population) + len(front) <= population_size:
+            new_population.extend(front)
+        else:
+            crowding_distance_assignment(front)
+            front.sort(key=lambda x: (x.rank, -x.distance))
+            selected_individuals = front[:population_size - len(new_population)]
+            new_population.extend(selected_individuals)
+            break
+    while len(new_population) < population_size:
+        parent1 = select(population, tournament_size)
+        parent2 = select(population, tournament_size)
+        child1, child2 = crossover(parent1.path, parent2.path)
+        mutate(child1)
+        mutate(child2)
+        new_population.extend([Individual(child1), Individual(child2)])
+    return new_population
+
+
+def genetic_algorithm(population_size, num_generations, tournament_size):
+    # 初始化种群
+    population = [Individual(generate_individual()) for _ in range(population_size)]
+    for _ in range(num_generations):
+        population = update_population(population, population_size, tournament_size)
+    return population
+
+# 主程序
+if __name__ == "__main__":
+    # 定义参数
+    city_list = ["city1", "city2", "city3", "city4", "city5", "city6", "city7", "city8", "city9", "city10", "city11",
+                 "city12"]
+    population_size = 200  # 种群大小
+    num_generations = 100  # 迭代次数或生成的数量，遗传算法的运行轮数
+    tournament_size = 0
+
+    # 初始化一个列表来存储所有运行的Pareto解集
+    all_pareto_solutions = []
+
+    # 运行算法8次
+    for run in range(30,):
+        pareto_front = genetic_algorithm(population_size, num_generations, tournament_size)
+        # 将当前运行的Pareto解集添加到总列表中
+        all_pareto_solutions.extend(pareto_front)
+
+        unique_solutions = {}
+        for individual in all_pareto_solutions:
+            # 使用路径作为唯一性检查的基准
+            path_tuple = tuple(individual.path)
+            if path_tuple not in unique_solutions:
+                unique_solutions[path_tuple] = individual
+            else:
+                # 如果已有该路径，保留Pareto前沿中的个体
+                # 注意：这里假设all_pareto_solutions已经是Pareto最优解，不需要基于适应度比较
+                pass  # 不执行任何操作，因为在Pareto最优解中，不应存在"更好"的概念
+
+        # 从字典中提取去重后的Pareto解集
+        final_pareto_solutions = list(unique_solutions.values())
+
+        # 输出 Pareto 最优解集
+        print("Pareto 最优解集：")
+        # 收集用于绘图的数据
+        transport_times = []  # 运输总时间
+        transport_costs = []  # 运输总成本
+        co2_emissions = []  # 碳排放量
+        for index, individual in enumerate(final_pareto_solutions):
+            print(f"\n路径: {individual.path}")
+
+            total_distance, total_cost, total_time, total_co2_emission, \
+                transfer_times, departure_times, waiting_times, transshipment_waiting_times, \
+                total_transfer_time, total_waiting_time, total_transport_time, extra_waiting_time = calculate_total_distance_cost_and_time(
+                individual.path)
+            print("从城市1开始运输的起始时间：", departure_times)
+            # 输出运输总成本、运输总距离和运输总时间
+            print(f"运输总成本: {total_cost} 元")
+            print(f"运输总距离: {total_distance} 公里")
+            print(f"运输总时间: {total_time} 小时")
+            print(f"行程总时间: {total_transport_time} 小时")
+            print(f"运输总碳排放: {total_co2_emission} 千克")
+            transport_times.append(total_time)
+            transport_costs.append(total_cost)
+            co2_emissions.append(total_co2_emission)
+
+
+            # 使用matplotlib绘制Pareto最优解集的三维关系图
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')  # 创建3D图形的轴
+
+            # 绘制三维散点图
+            scatter = ax.scatter(transport_times, transport_costs, co2_emissions, c='blue', marker='o',
+                                 label='Pareto Optimal Solutions')
+
+            # 添加图表标题和轴标签
+            ax.set_title('Pareto Optimal Set: Transport Time vs Cost vs CO2 Emissions')
+            ax.set_xlabel('Transport Time (Hours)')
+            ax.set_ylabel('Transport Cost (Units)')
+            ax.set_zlabel('CO2 Emissions (Units)')
+
+            # 显示图例
+            plt.legend()
